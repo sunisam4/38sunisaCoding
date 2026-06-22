@@ -1,10 +1,16 @@
-name = input("คุณชื่ออะไร?")
-age = int(input("คุณอายุเท่าไร "))
-print("สวัสดี" ,name)
-print("อีก1ปี คุณจะอายุ", age +1, "ปี")
-a = 10
-b = 2.5
-c = input("ใส่ข้อความ: ")
-print(type(a))
-print(type(b))
-print(type(c))
+print("โปรแกรมคำนวณคะแนนรวม")
+
+maths = int(input(" คณิตศาสตร์ "))
+thai = int(input(" วิชาภาษาไทย "))
+english = int(input(" วิชาภาษาอังกฤษ "))
+
+total_point = (maths + thai + english)
+average = total_point /3
+if average <60:
+    print("ดีเยี่ยม")
+elif average <80:
+    print("ดีมาก")
+elif average <40:
+    print("ผ่าน")
+print("by toey 4/4")
+print("thank you")
