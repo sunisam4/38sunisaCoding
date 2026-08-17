@@ -1,0 +1,56 @@
+import time
+import json
+import threading
+import webbrowser
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+HOST = '127.0.0.1'
+PORT = 8000
+
+QUIZZES = {
+    'ชีววิทยา': [
+        {'question': 'ออร์แกเนลล์ใดทำหน้าที่เปรียบเสมือนโรงงานไฟฟ้าของเซลล์?', 'choices': ['ไรโบโซม','ไมโทคอนเดรีย','กอลจิบอดี','ไลโซโซม'], 'answer': 1},
+        {'question': 'เบสใดที่พบใน RNA แต่ไม่พบใน DNA?', 'choices': ['อะดีนีน (A)','ไทมีน (T)','ยูราซิล (U)','กวานีน (G)'], 'answer': 2}
+    ],
+    'เคมี': [
+        {'question': 'พันธะที่เกิดจากการใช้อิเล็กตรอนร่วมกันของธาตุอโลหะคือพันธะใด?', 'choices': ['พันธะไอออนิก','พันธะโคเวเลนต์','พันธะโลหะ','พันธะไฮโดรเจน'], 'answer': 1},
+        {'question': 'สารที่มีค่า pH เท่ากับ 3 มีสมบัติเป็นอย่างไร?', 'choices': ['กรด','เบส','กลาง','เป็นเค็ม'], 'answer': 0}
+    ]
+}
+
+HISTORY = []
+
+HTML = r'''<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>StudyFlow Quiz</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 80% 10%,#154e6c,transparent 30%),radial-gradient(circle at 10% 90%,#28194d,transparent 35%),linear-gradient(135deg,#06131f,#0a2232 55%,#07131f);color:#eefaff;font-family:Arial,'Noto Sans Thai',sans-serif;min-height:100vh}.wrap{width:min(1250px,94%);margin:auto;padding:24px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}.profile{display:flex;align-items:center;gap:12px}.avatar{width:58px;height:58px;border-radius:50%;display:grid;place-items:center;font-size:30px;border:2px solid #5ee7ff;background:#18384f;box-shadow:0 0 25px #1bd5ff55}.sub{color:#91b4c6;font-size:13px}.nav{display:flex;gap:8px}.nav button,.secondary{background:#102d40;color:#fff;border:1px solid #3a7895;padding:10px 15px;border-radius:12px;cursor:pointer}.nav .active{background:linear-gradient(90deg,#138fc2,#5141b5)}.grid{display:grid;grid-template-columns:1.55fr .9fr;gap:20px}.panel{background:linear-gradient(145deg,#102d42dd,#071c2bdd);border:1px solid #39738d;border-radius:22px;padding:22px;box-shadow:0 20px 50px #0005;margin-bottom:20px}.chart{height:240px;border-bottom:1px solid #5793ad;background:repeating-linear-gradient(to bottom,transparent 0 59px,#4a9bb52a 60px 61px)}.chart svg{width:100%;height:100%}.labels{display:flex;justify-content:space-between;color:#9bbccc;font-size:12px}.stats{display:flex;justify-content:space-between;color:#5ee7ff;margin-top:10px}.subject{margin:18px 0}.head{display:flex;align-items:center;gap:12px}.icon{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;border:1px solid #38dfff;color:#6eeaff;font-size:20px}.bar{height:10px;background:#0b2537;border-radius:20px;overflow:hidden;margin:8px 0 0 52px}.bar span{display:block;height:100%;background:linear-gradient(90deg,#229fff,#41e7ff)}.donut{width:190px;height:190px;border-radius:50%;margin:15px auto;display:grid;place-items:center;background:conic-gradient(#26e0d0 0 88%,#d54b78 88%);box-shadow:0 0 35px #27dfff44}.donutin{width:130px;height:130px;border-radius:50%;background:#092335;display:grid;place-items:center;text-align:center;border:1px solid #427a91}.donutin strong{font-size:28px}.exam{border-top:1px solid #37677c;padding:14px 0;display:grid;grid-template-columns:42px 1fr auto;gap:10px;align-items:center}.exam .icon{border-radius:50%}.score{text-align:right}.primary{width:100%;border:0;border-radius:12px;padding:12px;color:#03151d;font-weight:bold;background:linear-gradient(90deg,#1bafff,#45e9ff);cursor:pointer}.cards{display:grid;grid-template-columns:repeat(2,1fr);gap:15px}.card{padding:20px;border:1px solid #3a7895;border-radius:18px;background:#0c2a3cbb}.card .primary{margin-top:15px}.question{margin:18px 0;padding:15px;border:1px solid #32677f;border-radius:14px;background:#092436}.choice{display:block;margin:9px 0;padding:10px;border:1px solid #356d86;border-radius:10px;cursor:pointer}.choice:hover{border-color:#59e5ff;background:#12435a}.result{text-align:center;padding:30px}.big{font-size:55px;color:#54e6ff}@media(max-width:900px){.grid{grid-template-columns:1fr}.top{align-items:flex-start}.nav{flex-wrap:wrap}}@media(max-width:600px){.cards{grid-template-columns:1fr}.nav{display:none}.stats{font-size:12px}}
+</style></head><body><div class="wrap"><header class="top"><div class="profile"><div class="avatar">👩🏻‍🎓</div><div><div style="font-size:20px">นางสาว สุนิสา ⚙️</div><div class="sub">STUDYFLOW / ระบบทำข้อสอบออนไลน์</div></div></div><nav class="nav"><button class="active" onclick="show('dashboard',this)">หน้าหลัก</button><button onclick="show('subjects',this)">คลังข้อสอบ</button><button onclick="show('history',this)">ประวัติ</button></nav></header>
+<section id="dashboard"><div class="grid"><main><div class="panel"><h2>MY READING TIME / เวลาที่อ่านไป</h2><div class="chart"><svg viewBox="0 0 800 240" preserveAspectRatio="none"><defs><linearGradient id="g" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#28dfff" stop-opacity=".35"/><stop offset="1" stop-color="#9a45ff" stop-opacity=".02"/></linearGradient></defs><path d="M0 200 C80 70 130 85 190 140 S280 170 350 100 S470 190 550 55 S650 170 800 90 L800 240 L0 240Z" fill="url(#g)"/><path d="M0 200 C80 70 130 85 190 140 S280 170 350 100 S470 190 550 55 S650 170 800 90" fill="none" stroke="#36ddff" stroke-width="4"/><g fill="#fff" stroke="#28dfff" stroke-width="3"><circle cx="130" cy="85" r="6"/><circle cx="230" cy="150" r="6"/><circle cx="350" cy="100" r="6"/><circle cx="550" cy="55" r="6"/><circle cx="680" cy="170" r="6"/><circle cx="800" cy="90" r="6"/></g></svg></div><div class="labels"><span>Sun</span><span>Fri</span><span>Thu</span><span>Sun2</span><span>Mon</span><span>Tue</span><span>Wed</span></div><div class="stats"><span>เวลาทั้งหมด: 15 ชม. 30 นาที</span><span>เวลาเฉลี่ย: 2 ชม. 15 นาที</span></div></div><div class="panel"><h2>คลังข้อสอบของฉัน</h2><div id="library"></div></div></main><aside class="panel"><h2>EXAM STATISTICS / สถิติการทำข้อสอบ</h2><div class="donut"><div class="donutin"><div><strong id="percent">0%</strong><div class="sub">Correct</div></div></div></div><div id="examList"></div></aside></div></section>
+<section id="subjects" style="display:none"><div class="panel"><h2>📚 คลังข้อสอบ / เลือกวิชา</h2><p class="sub">กดปุ่มเพื่อเริ่มทำข้อสอบ</p><div class="cards" id="subjectCards"></div></div></section>
+<section id="history" style="display:none"><div class="panel"><h2>📊 ประวัติการทำข้อสอบ</h2><div id="historyList"></div></div></section>
+<section id="quiz" style="display:none"><div class="panel"><div style="display:flex;justify-content:space-between"><h2 id="quizTitle"></h2><button class="secondary" onclick="show('subjects')">← กลับ</button></div><div id="quizBody"></div></div></section></div>
+<script>const quizzes=__QUIZZES__;let history=[];const icons={'ชีววิทยา':'🧬','เคมี':'⚗️'};const desc={'ชีววิทยา':'เซลล์และพันธุศาสตร์','เคมี':'เคมีพื้นฐาน'};function show(id,btn){['dashboard','subjects','history','quiz'].forEach(x=>document.getElementById(x).style.display='none');document.getElementById(id).style.display='block';document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));if(btn)btn.classList.add('active');if(id==='dashboard')renderDashboard();if(id==='subjects')renderSubjects();if(id==='history')renderHistory()}function progress(s){let a=history.filter(x=>x.subject===s);if(!a.length)return 0;return Math.round(a.reduce((x,y)=>x+y.score,0)/a.reduce((x,y)=>x+y.total,0)*100)}function renderDashboard(){document.getElementById('library').innerHTML=Object.keys(quizzes).map(s=>`<div class="subject"><div class="head"><div class="icon">${icons[s]}</div><div style="flex:1">${s}: ${desc[s]}</div><strong>${progress(s)}%</strong></div><div class="bar"><span style="width:${progress(s)}%"></span></div></div>`).join('');let sc=history.reduce((a,b)=>a+b.score,0),to=history.reduce((a,b)=>a+b.total,0);document.getElementById('percent').textContent=(to?Math.round(sc/to*100):0)+'%';renderExams()}function renderExams(){let box=document.getElementById('examList');if(!history.length){box.innerHTML='<div class="exam"><div class="icon">📚</div><div>ยังไม่มีประวัติการสอบ<div class="sub">เริ่มทำข้อสอบได้เลย</div></div></div>';return}box.innerHTML=history.slice().reverse().map(r=>`<div class="exam"><div class="icon">${icons[r.subject]}</div><div>${r.subject}<div class="sub">${r.date}</div></div><div class="score">${r.score}/${r.total}<div class="sub">${Math.round(r.score/r.total*100)}%</div></div></div>`).join('')}function renderSubjects(){document.getElementById('subjectCards').innerHTML=Object.keys(quizzes).map(s=>`<div class="card"><div class="icon">${icons[s]}</div><h3>${s}</h3><p class="sub">${desc[s]} • ${quizzes[s].length} ข้อ</p><button class="primary" onclick="startQuiz('${s}')">📝 เริ่มทำข้อสอบ</button></div>`).join('')}function startQuiz(s){let qs=quizzes[s];document.getElementById('quizTitle').textContent='📝 แบบทดสอบวิชา '+s;document.getElementById('quizBody').innerHTML=`<form id="quizForm">${qs.map((q,i)=>`<div class="question"><strong>${i+1}. ${q.question}</strong>${q.choices.map((c,j)=>`<label class="choice"><input type="radio" name="q${i}" value="${j}"> ${j+1}. ${c}</label>`).join('')}</div>`).join('')}<button class="primary">✅ ส่งคำตอบ</button></form>`;show('quiz');document.getElementById('quizForm').onsubmit=e=>{e.preventDefault();let score=0;qs.forEach((q,i)=>{let v=document.querySelector(`input[name=q${i}]:checked`);if(v&&+v.value===q.answer)score++});history.push({subject:s,score,total:qs.length,date:new Date().toLocaleString('th-TH')});document.getElementById('quizBody').innerHTML=`<div class="result"><div style="font-size:60px">🎉</div><h2>ทำข้อสอบเสร็จแล้ว!</h2><div class="big">${score}/${qs.length}</div><p>คะแนน ${Math.round(score/qs.length*100)}%</p><button class="primary" onclick="show('dashboard')">กลับหน้าหลัก</button></div>`}}function renderHistory(){let b=document.getElementById('historyList');if(!history.length){b.innerHTML='<p class="sub">ยังไม่มีประวัติการทำข้อสอบ</p>';return}b.innerHTML=history.slice().reverse().map(r=>`<div class="exam"><div class="icon">${icons[r.subject]}</div><div><strong>${r.subject}</strong><div class="sub">${r.date}</div></div><div class="score">${r.score}/${r.total}<div class="sub">${Math.round(r.score/r.total*100)}%</div></div></div>`).join('')}renderDashboard();</script></body></html>'''
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        data = HTML.replace('__QUIZZES__', json.dumps(QUIZZES, ensure_ascii=False)).encode('utf-8')
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/html; charset=utf-8')
+        self.send_header('Content-Length', str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+    def log_message(self, format, *args):
+        pass
+
+def open_browser():
+    time.sleep(0.8)
+    webbrowser.open(f'http://{HOST}:{PORT}')
+
+if __name__ == '__main__':
+    print(f'เปิดเว็บ: http://{HOST}:{PORT}')
+    threading.Thread(target=open_browser, daemon=True).start()
+    server = HTTPServer((HOST, PORT), Handler)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        server.server_close()
+        print('ปิดเว็บแล้ว')
