@@ -35,3 +35,5 @@
 ทำโครงงาน bu
 31/08/69
 จับคู่ทำงาน Code swap
+7/09/69
+Mini Project in Padlet ส่งงาน
